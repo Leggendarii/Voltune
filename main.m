@@ -22,7 +22,6 @@ clc;        % Clear the command window
 %% Load required libraries and datasets
 addpath(genpath('lib'));   % Analysis, computation, and plotting functions
 addpath(genpath('data'));  % Measurement data files
-addpath(genpath('PSCAD Validation')) % PSCAD Folder
 
 %% Parameters Initialization
 name = "VSC_test.csv";
