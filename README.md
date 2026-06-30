@@ -28,17 +28,42 @@ The repository entry point is `main.m`. It:
 4. Run the script.
 5. Review the calculated gains, generated plots, updated CSV values, and Simulink validation results.
 
+## Repository structure
+
+```
+Voltune/
+├── main.m                        # entry point – tuning and validation workflow
+├── scam.m                        # helper script
+├── tuning.slx                    # Simulink model used for EMT validation
+├── data/
+│   ├── VSC_test.csv              # converter and system parameter table (read/written by main.m)
+│   └── scheme.cir                # PSCAD Thevenin-equivalent circuit for EMT validation
+└── lib/
+    ├── Tools/
+    │   ├── DC_Cap.m              # estimates DC-link capacitance and DC voltage from AC ratings
+    │   ├── convertToPerUnit.m    # converts all controller gains to per-unit values
+    │   ├── plot_and_tables.m     # generates loop-response plots and summary tables
+    │   └── thevenin.m            # computes Thevenin-equivalent grid inductance and resistance
+    └── Transfer_Functions/
+        ├── PLL.m                 # designs PLL PI gains and returns open-loop TF and bandwidth
+        ├── Inner_Loop.m          # designs inner current-loop PI gains and returns open-loop TF
+        ├── Outer_Loop_V.m        # designs outer voltage-loop PI gains and performance metrics
+        ├── Outer_Loop_P.m        # designs outer active-power-loop PI gains and performance metrics
+        └── Outer_Loop_DC.m       # designs outer DC-link-loop PI gains and performance metrics
+```
+
 ## Inputs and outputs
 
 ### Inputs
 
-- A parameter table loaded from `VSC_test.csv`
-- MATLAB helper code under the project library paths
-- The `tuning.slx` Simulink model used for validation
+- `data/VSC_test.csv` – converter and system parameter table read by `main.m`
+- `lib/Tools/` – utility functions for Thevenin parameters, per-unit conversion, DC capacitor sizing, and plotting
+- `lib/Transfer_Functions/` – per-controller PI design functions (PLL, inner loop, outer V/P/DC loops)
+- `tuning.slx` – Simulink model used for closed-loop validation
 
 ### Outputs
 
-- updated grid and controller values written back to the CSV data file
+- updated grid and controller values written back to `data/VSC_test.csv`
 - loop bandwidth and phase-margin results displayed through plots/tables
 - Simulink validation results from the `tuning` model
 
