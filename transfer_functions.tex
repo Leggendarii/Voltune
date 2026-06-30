@@ -1,0 +1,291 @@
+\documentclass[12pt, a4paper]{article}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+
+\geometry{margin=2.5cm}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{Voltune -- Transfer Functions}
+\lhead{VSC Controller Tuning}
+\cfoot{\thepage}
+
+\title{\textbf{Transfer Functions} \\ \large VSC Controller Tuning -- Voltune}
+\author{Nicolae Darii (DTU and SGRE)}
+\date{}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{fancy}
+
+\tableofcontents
+\newpage
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Notation and Parameters}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{lll}
+\toprule
+\textbf{Symbol} & \textbf{Variable name} & \textbf{Description} \\
+\midrule
+$C_f$         & \texttt{C\_filt}   & Filter capacitance (F) \\
+$L_v$         & \texttt{L\_vsc}    & VSC inductance (H) \\
+$L_g$         & \texttt{L\_grid}   & Grid inductance (H) \\
+$R_v$         & \texttt{R\_vsc}    & VSC resistance ($\Omega$) \\
+$R_g$         & \texttt{R\_grid}   & Grid resistance ($\Omega$) \\
+$\omega_b$    & \texttt{omega\_b}  & Base angular frequency (rad/s) \\
+$V_{base}$    & \texttt{V\_base}   & AC base voltage (V) \\
+$P_{base}$    & \texttt{P\_base}   & Base power (W) \\
+$C_{dc}$      & \texttt{C\_dc}     & Equivalent DC capacitance (F) \\
+$V_{dc,base}$ & \texttt{Vdc\_base} & DC base voltage (V) \\
+$k_p,\,k_i$   & \texttt{Kp, Ki}    & PI proportional / integral gains \\
+$s$           & --                 & Laplace variable \\
+\bottomrule
+\end{tabular}
+\caption{Parameter symbols used throughout this document.}
+\end{table}
+
+The PI controller has the standard form
+\begin{equation}
+    C(s) = k_p + \frac{k_i}{s} = \frac{k_p s + k_i}{s}.
+\end{equation}
+All gains are computed automatically by MATLAB's \texttt{pidtune} at the specified tuning frequency.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Inner Loop (\texttt{Inner\_Loop.m})}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{Plant Transfer Function}
+
+The inner current-control loop models the LCL filter seen from the VSC terminals.
+The plant is
+
+\begin{equation}
+    G_{in}(s)
+    = \frac{C_f L_g s^{2} + C_f R_g s + 1}
+           {C_f L_g L_v s^{3}
+            + C_f\!\left(L_v R_g + L_g R_v\right)s^{2}
+            + \!\left(L_v + L_g + C_f R_v R_g\right)s
+            + \left(R_v + R_g\right)}.
+\end{equation}
+
+\subsection{Closed-Loop Transfer Function}
+
+The PI controller $C_{in}(s)$ is tuned via \texttt{pidtune(G\_in, "PI", $2\pi f_{in}$)}.
+The resulting closed-loop transfer function is
+
+\begin{equation}
+    T_{in}(s) = \frac{C_{in}(s)\,G_{in}(s)}{1 + C_{in}(s)\,G_{in}(s)}.
+\end{equation}
+
+\subsection{Outputs}
+\begin{itemize}
+    \item $k_{p,in}$ -- proportional gain of the inner loop (A/V)
+    \item $k_{i,in}$ -- integral gain of the inner loop (A/Vs)
+    \item $T_{in}(s)$ -- closed-loop transfer function passed to outer loops
+    \item $BW_{in}$ -- inner loop bandwidth (Hz)
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Outer Loop -- Active Power (\texttt{Outer\_Loop\_P.m})}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{Plant Transfer Function}
+
+The outer active-power loop maps a d-axis current reference to active power.
+Defining
+
+\begin{equation}
+    G_{out,P}(s)
+    = \frac{V_{base}\,\dfrac{\sqrt{3}}{\sqrt{2}}}
+           {C_f L_g s^{2}
+            + C_f R_g s
+            + \!\left(1 - C_f L_g \omega_b^{2}\right)},
+\end{equation}
+
+the combined plant seen by the PI controller is $T_{in}(s)\cdot G_{out,P}(s)$.
+
+\subsection{Open-Loop and Closed-Loop Transfer Functions}
+
+The PI controller $C_{out,P}(s)$ is tuned via
+\texttt{pidtune($T_{in}\cdot G_{out,P}$, "PI", $2\pi f_{P}$)}.
+
+\begin{align}
+    L_{P}(s) &= C_{out,P}(s)\,T_{in}(s)\,G_{out,P}(s),  \\[4pt]
+    T_{P}(s) &= \frac{L_{P}(s)}{1 + L_{P}(s)}.
+\end{align}
+
+\subsection{Outputs}
+\begin{itemize}
+    \item $k_{p,P}$ -- proportional gain (A/W)
+    \item $k_{i,P}$ -- integral gain (A/Ws)
+    \item $L_P(s)$ -- open-loop transfer function
+    \item $BW_{out,P}$ -- closed-loop bandwidth (Hz)
+    \item $\phi_{m,P}$ -- phase margin (degrees)
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Outer Loop -- Voltage Control (\texttt{Outer\_Loop\_V.m})}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{Plant Transfer Function}
+
+The outer voltage loop maps a q-axis current reference to the filter-bus voltage.
+The plant is
+
+\begin{equation}
+    G_{out,V}(s)
+    = \frac{-L_g \omega_b}
+           {C_f L_g s^{2}
+            + C_f R_g s
+            + \!\left(1 - C_f L_g \omega_b^{2}\right)}.
+\end{equation}
+
+The combined plant seen by the PI is $T_{in}(s)\cdot G_{out,V}(s)$.
+
+\subsection{Open-Loop and Closed-Loop Transfer Functions}
+
+The PI controller $C_{out,V}(s)$ is tuned via
+\texttt{pidtune($T_{in}\cdot G_{out,V}$, "PI", $2\pi f_{V}$)}.
+
+\begin{align}
+    L_{V}(s) &= C_{out,V}(s)\,T_{in}(s)\,G_{out,V}(s),  \\[4pt]
+    T_{V}(s) &= \frac{L_{V}(s)}{1 + L_{V}(s)}.
+\end{align}
+
+\subsection{Outputs}
+\begin{itemize}
+    \item $k_{p,V}$ -- proportional gain (V/A)
+    \item $k_{i,V}$ -- integral gain (V/As)
+    \item $L_V(s)$ -- open-loop transfer function
+    \item $BW_{out,V}$ -- closed-loop bandwidth (Hz)
+    \item $\phi_{m,V}$ -- phase margin (degrees)
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Outer Loop -- DC-Link Voltage (\texttt{Outer\_Loop\_DC.m})}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{Plant Transfer Function}
+
+The DC-link voltage controller includes the dynamics of the AC-side filter and
+the DC capacitor.  The DC capacitance $C_{dc}$ and base DC voltage $V_{dc,base}$
+are computed by the helper function \texttt{DC\_Cap($V_{base}$, $P_{base}$)}.
+
+\begin{equation}
+    G_{out,DC}(s)
+    = \frac{\dfrac{V_{base}\,\sqrt{3/2}}{C_{dc}\,V_{dc,base}}}
+           {C_f L_g s^{3}
+            + C_f R_g s^{2}
+            + \!\left(1 - C_f L_g \omega_b^{2}\right)s}.
+\end{equation}
+
+The integrator in the denominator captures the energy-storage dynamics of the DC
+capacitor.  The combined plant seen by the PI is $T_{in}(s)\cdot G_{out,DC}(s)$.
+
+\subsection{Open-Loop and Closed-Loop Transfer Functions}
+
+The PI controller $C_{out,DC}(s)$ is tuned via
+\texttt{pidtune($T_{in}\cdot G_{out,DC}$, "PI", $2\pi f_{DC}$, opts)},
+where \texttt{opts} sets the design focus to \emph{disturbance rejection}.
+
+\begin{align}
+    L_{DC}(s) &= C_{out,DC}(s)\,T_{in}(s)\,G_{out,DC}(s), \\[4pt]
+    T_{DC}(s) &= \frac{L_{DC}(s)}{1 + L_{DC}(s)}.
+\end{align}
+
+\subsection{Outputs}
+\begin{itemize}
+    \item $k_{p,DC}$ -- proportional gain (A/V)
+    \item $k_{i,DC}$ -- integral gain (A/Vs)
+    \item $L_{DC}(s)$ -- open-loop transfer function
+    \item $BW_{out,DC}$ -- closed-loop bandwidth (Hz)
+    \item $\phi_{m,DC}$ -- phase margin (degrees)
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Phase-Locked Loop (\texttt{PLL.m})}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{Plant Transfer Function}
+
+The PLL synchronises the converter with the grid voltage by estimating the
+grid-angle error.  The voltage-to-frequency plant is
+
+\begin{equation}
+    G_{PLL}(s)
+    = \frac{L_g \omega_b}
+           {C_f L_g L_v s^{3}
+            + C_f\!\left(L_g R_v + L_v R_g\right)s^{2}
+            + \!\left(L_g + L_v + C_f R_g R_v
+              - 3 C_f L_g L_v \omega_b^{2}\right)s
+            + \!\left(R_g + R_v
+              - C_f L_g R_v \omega_b^{2}
+              - C_f L_v R_g \omega_b^{2}\right)}.
+\end{equation}
+
+Because the PLL must track \emph{angle} (not frequency), an additional integrator
+$\tfrac{1}{s}$ is cascaded with the plant before tuning, giving the combined plant
+
+\begin{equation}
+    G_{PLL,aug}(s) = \frac{G_{PLL}(s)}{s}.
+\end{equation}
+
+\subsection{Open-Loop and Closed-Loop Transfer Functions}
+
+The PI controller $C_{PLL}(s)$ is tuned via
+\texttt{pidtune($G_{PLL,aug}$, "PI", $2\pi f_{PLL}$)}.
+
+\begin{align}
+    L_{PLL}(s) &= C_{PLL}(s)\,\frac{G_{PLL}(s)}{s}, \\[4pt]
+    T_{PLL}(s) &= \frac{L_{PLL}(s)}{1 + L_{PLL}(s)}.
+\end{align}
+
+\subsection{Outputs}
+\begin{itemize}
+    \item $k_{p,PLL}$ -- proportional gain (rad/s/V)
+    \item $k_{i,PLL}$ -- integral gain (rad/s/Vs)
+    \item $L_{PLL}(s)$ -- open-loop transfer function
+    \item $BW_{PLL}$ -- PLL bandwidth (Hz)
+    \item $\phi_{m,PLL}$ -- phase margin (degrees)
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Summary}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.6}
+\begin{tabular}{llcc}
+\toprule
+\textbf{Loop} & \textbf{File} & \textbf{Plant order} & \textbf{Controller} \\
+\midrule
+Inner current   & \texttt{Inner\_Loop.m}    & 3 & PI \\
+Outer power     & \texttt{Outer\_Loop\_P.m} & 2 & PI \\
+Outer voltage   & \texttt{Outer\_Loop\_V.m} & 2 & PI \\
+Outer DC-link   & \texttt{Outer\_Loop\_DC.m}& 3 (with integrator) & PI \\
+PLL             & \texttt{PLL.m}            & 3 (+ integrator)    & PI \\
+\bottomrule
+\end{tabular}
+\caption{Overview of control loops, their source files, plant order, and controller type.}
+\end{table}
+
+All controllers are PI regulators automatically tuned by MATLAB's
+\texttt{pidtune} at a user-specified bandwidth target.  The inner loop is always
+tuned first; its closed-loop transfer function $T_{in}(s)$ is then passed as an
+input to each outer-loop and PLL function.
+
+\end{document}
