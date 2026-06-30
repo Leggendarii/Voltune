@@ -1,0 +1,6 @@
+V1 1 0 Symbolic
+L1 1 2 Symbolic
+R1 2 3 Symbolic
+L2 3 4 Symbolic
+R2 4 0 Symbolic
+C3 3 0 Symbolic
